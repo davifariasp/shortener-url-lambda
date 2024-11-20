@@ -8,6 +8,8 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+import java.io.InputStream;
 import java.util.Map;
 import java.util.UUID;
 
@@ -58,15 +60,29 @@ public class UrlShortenerService {
                 .key(urlId + ".json")
                 .build();
 
-        GetObjectResponse response = s3Client.getObject(request).response();
-
-        String urlDataJson = response.contentDisposition();
+        InputStream s3ObjectStream;
 
         try {
-            UrlData urlData = objectMapper.readValue(urlDataJson, UrlData.class);
-            return new APIGatewayProxyResponseEvent().withBody(urlData.getOriginalUrl());
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Error parsing JSON: " + e.getMessage(), e);
+            s3ObjectStream = s3Client.getObject(request);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error fatchind URL data from S3" + e.getMessage(), e);
         }
+
+        UrlData urlData;
+
+        try {
+            urlData = objectMapper.readValue(s3ObjectStream, UrlData.class);
+        } catch (Exception e) {
+            throw new RuntimeException("Error parsing URL data from S3: " + e.getMessage(), e);
+        }
+
+        Long currentTime = System.currentTimeMillis() / 1000;
+
+        if (currentTime > urlData.getExpirationTime()){
+            return new APIGatewayProxyResponseEvent().withStatusCode(410).withBody("URL expired");
+        }
+
+        return new APIGatewayProxyResponseEvent().withStatusCode(302).withHeaders(Map.of("Location", urlData.getOriginalUrl()));
     }
 }

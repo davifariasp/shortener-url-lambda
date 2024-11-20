@@ -18,7 +18,7 @@ public class Main implements RequestHandler<APIGatewayProxyRequestEvent, APIGate
                 yield urlShortenerService.shortenUrl(body);
             }
             case "GET" -> {
-                String urlId = input.getQueryStringParameters().get("uuid");
+                String urlId = input.getPathParameters().get("urlId");
 
                 yield  urlShortenerService.getUrlOriginal(urlId);
             }
